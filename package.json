@@ -9,6 +9,19 @@
     "name": "Finsweet",
     "url": "https://www.finsweet.com/"
   },
+  "browser": {
+    "fs": false,
+    "path": false,
+    "os": false,
+    "crypto": false,
+    "events": false,
+    "zlib": false,
+    "http": false,
+    "net": false,
+    "core-js/fn/object/assign": false,
+    "core-js/fn/array/includes": false,
+    "core-js/fn/promise": false
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/finsweet/developer-starter.git"
@@ -34,23 +47,44 @@
     "update": "pnpm update -i -L"
   },
   "devDependencies": {
-    "@changesets/changelog-git": "^0.1.12",
-    "@changesets/cli": "^2.24.2",
+    "@changesets/changelog-git": "^0.1.13",
+    "@changesets/cli": "^2.25.0",
     "@finsweet/eslint-config": "^1.1.5",
     "@finsweet/tsconfig": "^1.1.0",
-    "@playwright/test": "^1.25.0",
+    "@playwright/test": "^1.26.1",
     "@trivago/prettier-plugin-sort-imports": "^3.3.0",
-    "@typescript-eslint/eslint-plugin": "^5.33.0",
-    "@typescript-eslint/parser": "^5.33.0",
+    "@types/express": "^4.17.14",
+    "@typescript-eslint/eslint-plugin": "^5.39.0",
+    "@typescript-eslint/parser": "^5.39.0",
+    "axios": "^1.1.2",
     "cross-env": "^7.0.3",
-    "esbuild": "^0.15.1",
-    "eslint": "^8.21.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.0.3",
+    "esbuild": "^0.15.10",
+    "eslint": "^8.24.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-prettier": "^4.2.1",
+    "express": "^4.18.1",
+    "fs": "0.0.1-security",
+    "pnpm": "^7.13.2",
     "prettier": "^2.7.1",
-    "typescript": "^4.7.4"
+    "require": "^2.4.20",
+    "typescript": "^4.8.4"
   },
   "dependencies": {
-    "@finsweet/ts-utils": "^0.33.1"
+    "@finsweet/ts-utils": "^0.33.2",
+    "airtable": "^0.11.5",
+    "jso": "^4.1.1",
+    "path": "^0.12.7",
+    "querystring": "^0.2.1",
+    "stream": "^0.0.2",
+    "url": "^0.11.0",
+    "webflow-api": "^0.8.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "uglify-js@<2.4.24": ">=2.4.24",
+      "uglify-js@<2.6.0": ">=2.6.0"
+    }
   }
 }
