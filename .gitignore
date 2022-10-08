@@ -26,4 +26,4 @@ typings/
 .env.test
 
 # Production files
-dist
+# dist
