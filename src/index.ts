@@ -5,10 +5,40 @@ import {
   simulateEvent,
 } from '@finsweet/ts-utils';
 import Airtable, { Record } from 'airtable';
-import { JSO, Fetcher, HTTPRedirect, Popup } from 'jso';
+import { JSO, Fetcher, Popup } from 'jso';
+
+import type { Block } from './types';
+import type { CMSFilters } from './types/CMSFilters';
 
 const Tclient_id = 'nef-3fAcxtMDg4oBpczTU9F6b0tXlIxwwAsWrNPNKIk';
 const Tclient_secret = 'aR21QXxCP1QnyAqbfg2Rix2gZqN-LtzVFrMt6Q4elFk';
+const product_id = 'Xp1BZuiM6Njyi4zOr8N0QA==';
+Airtable.configure({ apiKey: 'keyoAJiztjElB9kPt' });
+
+const base = new Airtable({ apiKey: 'keyoAJiztjElB9kPt' }).base('appUuG1tFze2ryTZW');
+const table = base('Components');
+
+const publicElements = document.querySelectorAll("[data-onlogin='hide']");
+const privateElements = document.querySelectorAll("[data-onlogin='show']");
+
+const normalUserElements = document.querySelectorAll("[ms-subscriber='hide']");
+const subscriberElements = document.querySelectorAll("[ms-subscriber='show']");
+
+let profileImage = '';
+let userEmail = '';
+let userDisplayName = '';
+
+window.Webflow ||= [];
+window.Webflow.push(() => {
+  const resetButton = queryElement('[fs-cmsfilter-element="reset"]', HTMLElement);
+  if (!resetButton) return;
+  $(document).keyup(function (e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      simulateEvent(resetButton, 'click');
+    }
+  });
+});
 
 const config = {
   client_id: Tclient_id,
@@ -23,9 +53,12 @@ const config = {
   token: 'https://api.gumroad.com/oauth/token',
   debug: true,
 };
+
 const client = new JSO(config);
 // client.wipeTokens();
 client.callback();
+
+const checkToken = client.checkToken();
 
 function authorizePopup() {
   const opts = {
@@ -41,32 +74,98 @@ function authorizePopup() {
       console.error('Error from passive loader', err);
     });
 }
+
+async function gumroadLogin() {
+  await authorizePopup();
+  window.location.reload();
+}
+
 $('#btnAuthenticate').on('click', (e) => {
   e.preventDefault();
-  authorizePopup();
+  gumroadLogin();
 });
 
-// client.setLoader(HTTPRedirect);
-// client
-//   .getToken()
-//   .then((token) => {
-//     console.log('I got the token: ', token);
-//   })
-//   .catch((err) => {
-//     console.error('Error from passive loader', err);
-//   });
-// if (
-//   location.search.includes('state=') &&
-//   (location.search.includes('code=') || location.search.includes('error='))
-// ) {
-//   window.history.replaceState({}, document.title, '/library');
-// } else {
-// }
+$('#btnLogout').on('click', (e) => {
+  e.preventDefault();
+  client.wipeTokens();
+  window.location.reload();
+});
 
-const checkToken = client.checkToken();
-const publicElements = document.querySelectorAll("[data-onlogin='hide']");
-const privateElements = document.querySelectorAll("[data-onlogin='show']");
-console.log(checkToken);
+window.fsAttributes = window.fsAttributes || [];
+window.fsAttributes.push([
+  'cmsfilter',
+  async (filtersInstances: CMSFilters[]) => {
+    // Get the filters instance
+    const [filtersInstance] = filtersInstances;
+
+    // Get the list instance
+    const { listInstance } = filtersInstance;
+
+    // Save a copy of the template
+    const [firstItem] = listInstance.items;
+    const itemTemplateElement = firstItem.element;
+
+    // Fetch external data
+    const blocksArr = [];
+    let newItems = [];
+    table
+      .select({
+        maxRecords: 300,
+        sort: [{ field: 'Name', direction: 'asc' }],
+        view: 'All Components',
+      })
+      .eachPage(
+        function page(records, fetchNextPage) {
+          // This function (`page`) will get called for each page of records.
+          records.forEach(function (record) {
+            blocksArr.push(record.fields);
+
+            // console.log('Retrieved', record.fields);
+          });
+          // To fetch the next page of records, call `fetchNextPage`.
+          // If there are more records, `page` will get called again.
+          // If there are no more records, `done` will get called.
+          fetchNextPage();
+        },
+        async function done(err) {
+          if (err) {
+            console.error(err);
+            return;
+          }
+          // Remove existing items
+          listInstance.clearItems();
+
+          // Create the new items
+          newItems = blocksArr.map((block: Block) => createItem(block, itemTemplateElement));
+
+          // Populate the list
+          await listInstance.addItems(newItems);
+        }
+      );
+  },
+]);
+
+const createItem = (block: Block, templateElement: HTMLDivElement) => {
+  // Clone the template element
+  const newItem = templateElement.cloneNode(true) as HTMLDivElement;
+
+  // Query inner elements
+  const image = newItem.querySelector<HTMLImageElement>('[ms-element="image"]');
+  const title = newItem.querySelector<HTMLHeadingElement>('[ms-element="title"]');
+  // const category = newItem.querySelector<HTMLDivElement>('[ms-element="category"]');
+  const copyButtonElem = newItem.querySelector<HTMLElement>('[ms-element="copy-button"]');
+  let copyButton = {};
+
+  // Populate inner elements
+  if (image) image.srcset = block.Image;
+  if (title) title.textContent = block.Name;
+  const { Json } = block;
+
+  if (copyButtonElem) copyButton = new CopyJSONButton({ element: copyButtonElem, copyData: Json });
+
+  return newItem;
+};
+
 if (checkToken !== null) {
   privateElements.forEach(function (element) {
     element.style.display = 'initial';
@@ -79,14 +178,57 @@ if (checkToken !== null) {
   console.log('I got the token: ', checkToken.access_token);
 
   const f = new Fetcher(client);
-  const url = 'https://api.gumroad.com/v2/user';
+  const urlUser = `https://api.gumroad.com/v2/user`;
 
-  f.fetch(url, { access_token: checkToken.access_token })
+  f.fetch(urlUser, { access_token: checkToken.access_token })
     .then((data) => {
       return data.json();
     })
     .then((data) => {
-      console.log('I got protected json data from the API', data);
+      profileImage = data.user.profile_url;
+      userEmail = data.user.email;
+      userDisplayName = data.user.display_name;
+    })
+    .catch((err) => {
+      console.error('Error from fetcher', err);
+    });
+
+  const fSubscribers = new Fetcher(client);
+  const url = `https://api.gumroad.com/v2/products/${product_id}/subscribers`;
+
+  fSubscribers
+    .fetch(url, { access_token: checkToken.access_token })
+    .then((data) => {
+      return data.json();
+    })
+    .then((data) => {
+      console.log('I got protected json data from the API', data.subscribers);
+      const subscribersArr = data.subscribers;
+      const filteredSubscribers = subscribersArr.filter(
+        (subscriber) => subscriber.status === 'alive'
+      );
+      const userMatch = filteredSubscribers.find(
+        (user) => user.email === 'multi@minimal-square.com'
+      );
+      if (userMatch) {
+        console.log('I am user');
+        subscriberElements.forEach(function (element) {
+          element.style.display = 'initial';
+        });
+
+        normalUserElements.forEach(function (element) {
+          element.style.display = 'none';
+        });
+      } else {
+        console.log("I'm not user");
+        normalUserElements.forEach(function (element) {
+          element.style.display = 'initial';
+        });
+
+        subscriberElements.forEach(function (element) {
+          element.style.display = 'none';
+        });
+      }
     })
     .catch((err) => {
       console.error('Error from fetcher', err);
@@ -101,233 +243,6 @@ if (checkToken !== null) {
   });
 }
 
-// onAuthStateChanged(auth, (user) => {
-//   const f = new Fetcher(client);
-//   const url = 'https://api.gumroad.com/v2/user';
-//   f.fetch(url, { access_token: checkToken.access_token })
-//     .then((data) => {
-//       return data.json();
-//     })
-//     .then((data) => {
-//       console.log('I got protected json data from the API', data);
-//     })
-//     .catch((err) => {
-//       console.error('Error from fetcher', err);
-//     });
-
-//   if (user) {
-//     // User is signed in, see docs for a list of available properties
-
-//     const uid = user.uid;
-
-//     privateElements.forEach(function (element) {
-//       element.style.display = 'initial';
-//     });
-
-//     publicElements.forEach(function (element) {
-//       element.style.display = 'none';
-//     });
-
-//     console.log(`The current user's UID is equal to ${uid}`);
-//     // ...
-//   } else {
-//     // User is signed out
-//     publicElements.forEach(function (element) {
-//       element.style.display = 'initial';
-//     });
-
-//     privateElements.forEach(function (element) {
-//       element.style.display = 'none';
-//     });
-//     // ...
-//   }
-// });
-// const token = client.checkToken();
-// if (token !== null) {
-//   console.log('I got the token: ', token.access_token);
-//   const f = new Fetcher(client);
-//   const url = 'https://api.gumroad.com/v2/resource_subscriptions';
-//   f.fetch(url, { access_token: token.access_token, resource_name: 'sale' })
-//     .then((data) => {
-//       console.log('I got protected json data from the API', data);
-//       return data.json();
-//     })
-//     .then((data) => {
-//       console.log('I got protected json data from the API', data);
-//     })
-//     .catch((err) => {
-//       console.error('Error from fetcher', err);
-//     });
-// } else {
-//   client.getToken(config).then((token) => {
-//     console.log('I got the token: ', token);
-//   });
-// }
-// const f = new FetcherJQuery(client, $);
-// const url = 'https://api.gumroad.com/v2/products';
-// f.fetch(url, { access_token: token.access_token })
-//   .then((data) => {
-//     console.log('I got protected json data from the API', data);
-//   })
-//   .catch((err) => {
-//     console.error('Error from fetcher', err);
-//   });
-
-// const f = new Fetcher(client);
-// const url = 'https://api.gumroad.com/oauth/token';
-// f.fetch(url, {})
-//   .then((data) => {
-//     return data.json();
-//   })
-//   .then((data) => {
-//     console.log('I got protected json data from the API', data);
-//   })
-//   .catch((err) => {
-//     console.error('Error from fetcher', err);
-//   });
-
-Airtable.configure({ apiKey: 'keyoAJiztjElB9kPt' });
-window.Webflow ||= [];
-window.Webflow.push(() => {
-  const resetButton = queryElement('[fs-cmsfilter-element="reset"]', HTMLElement);
-  if (!resetButton) return;
-  $(document).keyup(function (e) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      simulateEvent(resetButton, 'click');
-    }
-  });
-
-  // require('dotenv').config();
-  // const { GUMROAD_CLIENT_ID } = process.env;
-  // console.log(GUMROAD_CLIENT_ID);
-
-  // const opts = {
-  //   scopes: {
-  //     request: ['view_profile'],
-  //   },
-  //   request: {
-  //     prompt: 'none',
-  //   },
-  //   response_type: 'id_token token',
-  //   redirect_uri: 'https://minimal-ui-test.webflow.io/library',
-  //   token: 'https://api.gumroad.com/oauth/token',
-  // };
-  // client.setLoader(IFramePassive);
-  // client
-  //   .getToken(opts)
-  //   .then((token) => {
-  //     console.log('I got the token: ', token);
-  //   })
-  //   .catch((err) => {
-  //     console.error('Error from passive loader', err);
-  //   });
-
-  // const base = new Airtable({ apiKey: 'keyoAJiztjElB9kPt' }).base('appUuG1tFze2ryTZW');
-  // const table = base('Components');
-  // table
-  //   .select({
-  //     maxRecords: 20,
-  //     sort: [{ field: 'Block Code', direction: 'desc' }],
-  //     view: 'All Components',
-  //   })
-  //   .eachPage(
-  //     function page(records, fetchNextPage) {
-  //       // This function (`page`) will get called for each page of records.
-
-  //       records.forEach(function (record) {
-  //         console.log('Retrieved', record.fields);
-  //         const copyElement = queryElement('[ms-element="copy-button"]', HTMLElement);
-  //         if (!copyElement) return;
-  //         const copyJSONData = record.get('Block Code');
-  //         console.log(typeof copyJSONData);
-
-  //         const copyButton = new CopyJSONButton({
-  //           element: copyElement,
-  //           copyData: copyJSONData,
-  //         });
-
-  //         console.log(copyButton);
-  //       });
-
-  //       // To fetch the next page of records, call `fetchNextPage`.
-  //       // If there are more records, `page` will get called again.
-  //       // If there are no more records, `done` will get called.
-  //       fetchNextPage();
-  //     },
-  //     function done(err) {
-  //       if (err) {
-  //         console.error(err);
-  //         return;
-  //       }
-  //     }
-  //   );
-
-  // const copyDataElement = queryElement('[ms-element="copy-data"]', HTMLTextAreaElement);
-  // if (!copyDataElement) return;
-  // const copyData = copyDataElement.innerHTML;
-
-  // console.log(copyData);
-
-  // if (document.querySelector('.copy-button')) {
-  //   let dataCopy;
-
-  //   $(document).ready(function () {
-  //     $('.copy-button').on('click', function (event) {
-  //       if ($(event.target).parent().find('.snippet')) {
-  //         editTask(event.target, $(event.target).parent());
-  //       } else {
-  //         dataCopy = '';
-  //       }
-  //     });
-  //   });
-
-  //   document.addEventListener('copy', (event) => {
-  //     event.clipboardData.setData('application/json', dataCopy);
-  //     event.preventDefault();
-  //   });
-
-  //   function editTask(node, event) {
-  //     dataCopy = $(node).parent().find('.snippet').text();
-  //     document.execCommand('copy');
-  //     $(event).parent().find('.copy-button-text').text('Copied!');
-  //     setTimeout(function () {
-  //       $(event).parent().find('.copy-button-text').text('Copy');
-  //     }, 1200);
-  //   }
-  // }
-
-  // // Initialize the API
-  // const api = new Webflow({
-  //   token: 'a7b410271913ac1a8cd9246cfca205570c5bbde64cc27be896c0e4902f256a8a',
-  // });
-
-  // // Fetch a site
-  // api.sites().then((result) => console.log(result));
-
-  // axios
-  //   .get('https://api.webflow.com/sites', {
-  //     headers: {
-  //       Authorization: `a7b410271913ac1a8cd9246cfca205570c5bbde64cc27be896c0e4902f256a8a`,
-  //     },
-  //   })
-  //   .then(function (response) {
-  //     // handle success
-  //     console.log(response);
-  //   })
-  //   .catch(function (error) {
-  //     // handle error
-  //     console.log(error);
-  //   })
-  //   .then(function () {
-  //     // always executed
-  //   });
-});
-
-// const element = document.querySelector('[ms-test]');
-// const html = element.outerHTML;
-// const testValue = Object.entries(element);
-// const data = { html: html };
-// const elementJSON = JSON.stringify(data);
-// const parsedJSON = JSON.parse(elementJSON);
-// console.log(parsedJSON);
+// require('dotenv').config();
+// const { GUMROAD_CLIENT_ID } = process.env;
+// console.log(GUMROAD_CLIENT_ID);
