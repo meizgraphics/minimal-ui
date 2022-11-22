@@ -62,7 +62,7 @@ const checkToken = client.checkToken();
 
 function authorizePopup() {
   const opts = {
-    redirect_uri: 'https://minimal-ui-test.webflow.io/popup-callback',
+    redirect_uri: `https://minimal-ui-test.webflow.io/popup-callback`,
   };
   client.setLoader(Popup);
   client
@@ -112,7 +112,7 @@ window.fsAttributes.push([
       .select({
         maxRecords: 300,
         sort: [{ field: 'Name', direction: 'asc' }],
-        view: 'All Components',
+        view: 'New Components',
       })
       .eachPage(
         function page(records, fetchNextPage) {
@@ -196,6 +196,10 @@ if (checkToken !== null) {
   const fSubscribers = new Fetcher(client);
   const url = `https://api.gumroad.com/v2/products/${product_id}/subscribers`;
 
+  /**
+   * Creates a hidden button that will serve as the copy trigger.
+   * @returns The new button element.
+   */
   fSubscribers
     .fetch(url, { access_token: checkToken.access_token })
     .then((data) => {
